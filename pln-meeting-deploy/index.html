@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meeting</title>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#151b23; --panel-2:#1c232e; --line:#2a323d;
+    --text:#e6e9ee; --dim:#8b95a1; --accent:#3d8bfd; --accent-2:#2563eb; --danger:#e5484d;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+  .screen{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px 24px;}
+  .card h1{font-size:19px;margin:0 0 4px;font-weight:600;}
+  .card p.sub{color:var(--dim);font-size:13px;margin:0 0 22px;line-height:1.5;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;color:var(--dim);margin-bottom:6px;}
+  .field input{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:11px 12px;color:var(--text);font-size:14px;}
+  .btn{width:100%;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;margin-top:6px;background:var(--accent-2);color:#fff;}
+  .btn:hover{background:var(--accent);}
+  .btn-secondary{background:var(--panel-2);color:var(--text);border:1px solid var(--line);}
+  .status{font-size:12px;color:var(--dim);margin-top:14px;min-height:16px;text-align:center;}
+  .divider{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:12px;margin:18px 0;}
+  .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line);}
+
+  .link-box{display:flex;gap:8px;margin-top:6px;}
+  .link-box input{flex:1;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:11px 12px;color:var(--text);font-size:13px;}
+  .link-box button{border:none;border-radius:8px;padding:0 16px;background:var(--accent-2);color:#fff;font-size:13px;font-weight:600;cursor:pointer;}
+
+  #room{display:none;flex:1;flex-direction:column;}
+  #grid{flex:1;display:grid;gap:6px;padding:6px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));align-content:start;overflow-y:auto;}
+  .tile{position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:4/3;}
+  .tile video{width:100%;height:100%;object-fit:cover;}
+  .tile .name{position:absolute;left:8px;bottom:8px;font-size:12px;background:rgba(0,0,0,.55);padding:2px 8px;border-radius:6px;}
+
+  #controls{display:flex;align-items:center;justify-content:center;gap:12px;padding:16px;background:var(--panel);border-top:1px solid var(--line);}
+  .ctrl-btn{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--panel-2);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:19px;}
+  .ctrl-btn.active{background:var(--accent-2);border-color:var(--accent-2);}
+  .ctrl-btn.off{background:var(--danger);border-color:var(--danger);}
+  .ctrl-btn.end{background:var(--danger);border-color:var(--danger);}
+
+  #roomLabel{position:fixed;top:14px;left:14px;background:rgba(20,25,32,.85);border:1px solid var(--line);padding:6px 12px;border-radius:20px;font-size:12px;color:var(--dim);z-index:5;}
+  #roomLabel span{color:var(--text);font-weight:600;}
+</style>
+</head>
+<body>
+
+<!-- ====== EDIT DUA BARIS INI SEBELUM DI-DEPLOY ====== -->
+<script>
+  const TOKEN_SERVER_URL = "/.netlify/functions/token"; // sudah otomatis, satu domain sama frontend
+  const LIVEKIT_WS_URL   = "wss://meeting-ut7whogq.livekit.cloud";
+</script>
+<!-- ==================================================== -->
+
+<!-- HOME: buat meeting atau gabung pakai kode -->
+<div class="screen" id="home">
+  <div class="card">
+    <h1>Meeting</h1>
+    <p class="sub">Buat ruang baru lalu bagikan linknya, atau masuk pakai kode dari teman.</p>
+    <button class="btn" id="createBtn">Buat meeting baru</button>
+    <div class="divider">atau</div>
+    <div class="field">
+      <label for="joinCodeInput">Kode meeting</label>
+      <input id="joinCodeInput" type="text" placeholder="Contoh: rapat-pagi-482">
+    </div>
+    <button class="btn btn-secondary" id="joinByCodeBtn">Gabung</button>
+  </div>
+</div>
+
+<!-- LINK SIAP DIBAGIKAN -->
+<div class="screen" id="linkReady" style="display:none;">
+  <div class="card">
+    <h1>Meeting sudah siap</h1>
+    <p class="sub">Bagikan link ini ke peserta lain. Siapa pun yang buka link ini akan langsung masuk ke ruang yang sama.</p>
+    <div class="link-box">
+      <input id="shareLink" type="text" readonly>
+      <button id="copyLinkBtn">Salin</button>
+    </div>
+    <button class="btn" id="startNowBtn" style="margin-top:22px;">Masuk sekarang</button>
+  </div>
+</div>
+
+<!-- ISI NAMA sebelum masuk -->
+<div class="screen" id="namePrompt" style="display:none;">
+  <div class="card">
+    <h1>Masuk meeting</h1>
+    <p class="sub" id="roomPreviewText"></p>
+    <div class="field">
+      <label for="identityInput">Nama kamu</label>
+      <input id="identityInput" type="text" placeholder="Nama">
+    </div>
+    <button class="btn" id="enterBtn">Masuk</button>
+    <div class="status" id="joinStatus"></div>
+  </div>
+</div>
+
+<!-- CALL SCREEN -->
+<div id="room">
+  <div id="roomLabel">Ruang: <span id="roomLabelText"></span></div>
+  <div id="grid"></div>
+  <div id="controls">
+    <button class="ctrl-btn active" id="micBtn">🎤</button>
+    <button class="ctrl-btn active" id="camBtn">📷</button>
+    <button class="ctrl-btn" id="shareBtn">🖥️</button>
+    <button class="ctrl-btn end" id="endBtn">✕</button>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let room, micOn = true, camOn = true, sharing = false;
+let currentRoomCode = null;
+
+function showScreen(id){
+  ["home","linkReady","namePrompt"].forEach(s => $(s).style.display = (s===id) ? "flex" : "none");
+  $("room").style.display = "none";
+}
+
+function generateRoomCode(){
+  const words = ["meja","langit","pagi","kopi","elang","sungai","batu","angin"];
+  const w = words[Math.floor(Math.random()*words.length)];
+  const n = Math.floor(100 + Math.random()*900);
+  return `${w}-${n}`;
+}
+
+function buildShareUrl(roomCode){
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("room", roomCode);
+  return url.toString();
+}
+
+// ---------- Home actions ----------
+$("createBtn").addEventListener("click", ()=>{
+  currentRoomCode = generateRoomCode();
+  const link = buildShareUrl(currentRoomCode);
+  $("shareLink").value = link;
+  showScreen("linkReady");
+});
+
+$("copyLinkBtn").addEventListener("click", async ()=>{
+  try{
+    await navigator.clipboard.writeText($("shareLink").value);
+    $("copyLinkBtn").textContent = "Tersalin";
+    setTimeout(()=> $("copyLinkBtn").textContent = "Salin", 1500);
+  }catch(e){
+    $("shareLink").select();
+  }
+});
+
+$("startNowBtn").addEventListener("click", ()=>{
+  goToNamePrompt(currentRoomCode);
+});
+
+$("joinByCodeBtn").addEventListener("click", ()=>{
+  const code = $("joinCodeInput").value.trim();
+  if(!code) return;
+  goToNamePrompt(code);
+});
+
+function goToNamePrompt(roomCode){
+  currentRoomCode = roomCode;
+  $("roomPreviewText").textContent = `Kamu akan masuk ke ruang "${roomCode}"`;
+  showScreen("namePrompt");
+}
+
+// ---------- Auto-join dari link (?room=xxx) ----------
+window.addEventListener("DOMContentLoaded", ()=>{
+  const params = new URLSearchParams(window.location.search);
+  const roomFromUrl = params.get("room");
+  if(roomFromUrl){
+    goToNamePrompt(roomFromUrl);
+  } else {
+    showScreen("home");
+  }
+});
+
+// ---------- Join room (LiveKit) ----------
+function addTile(id, track, name, isLocal=false){
+  removeTile(id);
+  const tile = document.createElement("div");
+  tile.className = "tile";
+  tile.id = "tile-" + id;
+  const video = document.createElement("video");
+  video.autoplay = true; video.playsInline = true;
+  if(isLocal) video.muted = true;
+  track.attach(video);
+  const label = document.createElement("div");
+  label.className = "name";
+  label.textContent = name;
+  tile.appendChild(video);
+  tile.appendChild(label);
+  $("grid").appendChild(tile);
+}
+function removeTile(id){
+  const el = document.getElementById("tile-" + id);
+  if(el) el.remove();
+}
+
+$("enterBtn").addEventListener("click", async ()=>{
+  const identity = $("identityInput").value.trim();
+  if(!identity){
+    $("joinStatus").textContent = "Isi nama dulu.";
+    return;
+  }
+  await joinRoom(currentRoomCode, identity);
+});
+
+async function joinRoom(roomName, identity){
+  try{
+    $("joinStatus").textContent = "Menghubungkan...";
+    const res = await fetch(`${TOKEN_SERVER_URL}/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`);
+    if(!res.ok) throw new Error("Token server menolak permintaan.");
+    const { token } = await res.json();
+
+    room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
+
+    room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+      addTile(participant.identity + "-" + track.sid, track, participant.identity);
+    });
+    room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
+      removeTile(participant.identity + "-" + track.sid);
+    });
+    room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+      document.querySelectorAll(`[id^="tile-${participant.identity}"]`).forEach(el => el.remove());
+    });
+    room.on(LivekitClient.RoomEvent.Disconnected, () => {
+      showScreen("home");
+    });
+
+    await room.connect(LIVEKIT_WS_URL, token);
+    await room.localParticipant.enableCameraAndMicrophone();
+
+    const camPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+    if(camPub && camPub.track){
+      addTile("local-cam", camPub.track, identity + " (kamu)", true);
+    }
+
+    // update URL bar biar jadi link yang bisa dicopy langsung dari address bar juga
+    const newUrl = buildShareUrl(roomName);
+    window.history.replaceState({}, "", newUrl);
+
+    $("roomLabelText").textContent = roomName;
+    ["home","linkReady","namePrompt"].forEach(s => $(s).style.display = "none");
+    $("room").style.display = "flex";
+  }catch(e){
+    console.error(e);
+    $("joinStatus").textContent = "Gagal join: " + e.message;
+  }
+}
+
+// ---------- Controls ----------
+$("micBtn").addEventListener("click", async ()=>{
+  if(!room) return;
+  micOn = !micOn;
+  await room.localParticipant.setMicrophoneEnabled(micOn);
+  $("micBtn").classList.toggle("active", micOn);
+  $("micBtn").classList.toggle("off", !micOn);
+  $("micBtn").textContent = micOn ? "🎤" : "🔇";
+});
+
+$("camBtn").addEventListener("click", async ()=>{
+  if(!room) return;
+  camOn = !camOn;
+  await room.localParticipant.setCameraEnabled(camOn);
+  $("camBtn").classList.toggle("active", camOn);
+  $("camBtn").classList.toggle("off", !camOn);
+  $("camBtn").textContent = camOn ? "📷" : "🚫";
+});
+
+$("shareBtn").addEventListener("click", async ()=>{
+  if(!room) return;
+  sharing = !sharing;
+  await room.localParticipant.setScreenShareEnabled(sharing);
+  $("shareBtn").classList.toggle("active", sharing);
+});
+
+$("endBtn").addEventListener("click", async ()=>{
+  if(room) await room.disconnect();
+  window.location.href = window.location.pathname;
+});
+</script>
+</body>
+</html>
