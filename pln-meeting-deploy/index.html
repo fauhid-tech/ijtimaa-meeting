@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Meeting</title>
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 <style>
@@ -11,7 +11,8 @@
     --text:#e6e9ee; --dim:#8b95a1; --accent:#3d8bfd; --accent-2:#2563eb; --danger:#e5484d;
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+  html,body{margin:0;height:100%;}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;height:100dvh;display:flex;flex-direction:column;overflow:hidden;}
 
   .screen{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;}
   .card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px 24px;}
@@ -31,32 +32,56 @@
   .link-box input{flex:1;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:11px 12px;color:var(--text);font-size:13px;}
   .link-box button{border:none;border-radius:8px;padding:0 16px;background:var(--accent-2);color:#fff;font-size:13px;font-weight:600;cursor:pointer;}
 
-  #room{display:none;flex:1;flex-direction:column;min-height:0;}
-  #grid{flex:1;min-height:0;display:grid;gap:6px;padding:6px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));grid-auto-rows:minmax(0,1fr);align-content:stretch;overflow-y:auto;}
-  .tile{position:relative;background:#000;border-radius:8px;overflow:hidden;min-height:120px;}
-  .tile video{width:100%;height:100%;object-fit:cover;display:block;}
-  .tile .name{position:absolute;left:8px;bottom:8px;font-size:12px;background:rgba(0,0,0,.55);padding:2px 8px;border-radius:6px;}
+  #room{display:none;flex:1;flex-direction:column;min-height:0;position:relative;}
 
-  #controls{display:flex;align-items:center;justify-content:center;gap:12px;padding:16px;background:var(--panel);border-top:1px solid var(--line);}
-  .ctrl-btn{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--panel-2);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:19px;}
+  #stageArea{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+
+  #mainStage{display:none;flex:0 1 auto;min-height:0;position:relative;background:#000;margin:6px 6px 0;border-radius:8px;overflow:hidden;flex-grow:1;}
+  #mainStage video{width:100%;height:100%;object-fit:contain;background:#000;display:block;}
+  #mainStage .name{position:absolute;left:10px;bottom:10px;font-size:12px;background:rgba(0,0,0,.6);padding:3px 10px;border-radius:6px;}
+  #unpinBtn{position:absolute;top:10px;right:10px;background:rgba(20,25,32,.85);border:1px solid var(--line);color:var(--text);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;}
+
+  #grid{flex:1;min-height:0;display:grid;gap:6px;padding:6px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));grid-auto-rows:minmax(0,1fr);align-content:stretch;overflow-y:auto;transition:flex .15s;}
+  #grid.filmstrip{flex:0 0 92px;grid-auto-flow:column;grid-auto-columns:130px;grid-template-columns:none;grid-template-rows:1fr;overflow-x:auto;overflow-y:hidden;}
+
+  .tile{position:relative;background:#000;border-radius:8px;overflow:hidden;min-height:80px;cursor:pointer;border:2px solid transparent;}
+  .tile.pinned{border-color:var(--accent);}
+  .tile video{width:100%;height:100%;object-fit:cover;display:block;}
+  .tile .name{position:absolute;left:6px;bottom:6px;font-size:11px;background:rgba(0,0,0,.6);padding:2px 7px;border-radius:6px;white-space:nowrap;max-width:calc(100% - 12px);overflow:hidden;text-overflow:ellipsis;}
+  .tile .micoff{position:absolute;right:6px;top:6px;background:rgba(0,0,0,.6);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;}
+
+  #controls{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line);flex:0 0 auto;position:relative;z-index:5;}
+  .ctrl-btn{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--panel-2);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;position:relative;}
   .ctrl-btn.active{background:var(--accent-2);border-color:var(--accent-2);}
   .ctrl-btn.off{background:var(--danger);border-color:var(--danger);}
   .ctrl-btn.end{background:var(--danger);border-color:var(--danger);}
+  .badge-count{position:absolute;top:-4px;right:-4px;background:var(--accent);color:#fff;font-size:10px;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px;}
 
-  #roomLabel{position:fixed;top:14px;left:14px;background:rgba(20,25,32,.85);border:1px solid var(--line);padding:6px 12px;border-radius:20px;font-size:12px;color:var(--dim);z-index:5;}
+  #roomLabel{position:absolute;top:10px;left:10px;background:rgba(20,25,32,.85);border:1px solid var(--line);padding:5px 10px;border-radius:16px;font-size:11px;color:var(--dim);z-index:6;}
   #roomLabel span{color:var(--text);font-weight:600;}
+
+  #participantsPanel{display:none;position:absolute;right:0;top:0;bottom:0;width:280px;max-width:80vw;background:var(--panel);border-left:1px solid var(--line);z-index:10;flex-direction:column;}
+  #participantsPanel .ph{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;}
+  #participantsPanel .ph h3{margin:0;font-size:14px;font-weight:600;}
+  #participantsPanel .closeP{background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;}
+  #participantsList{flex:1;overflow-y:auto;padding:8px;}
+  .prow{display:flex;align-items:center;gap:8px;padding:9px 8px;border-radius:8px;}
+  .prow:hover{background:var(--panel-2);}
+  .prow .pname{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .prow .ptag{font-size:10px;color:var(--dim);}
+  .prow .pmic{font-size:13px;color:var(--dim);width:18px;text-align:center;}
+  .prow button.cohost-btn{font-size:10px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:4px 8px;cursor:pointer;white-space:nowrap;}
+  .prow button.cohost-btn.active{background:var(--accent-2);border-color:var(--accent-2);}
 </style>
 </head>
 <body>
 
-<!-- ====== EDIT DUA BARIS INI SEBELUM DI-DEPLOY ====== -->
+<!-- EDIT DUA BARIS INI SEBELUM DI-DEPLOY -->
 <script>
-  const TOKEN_SERVER_URL = "/.netlify/functions/token"; // sudah otomatis, satu domain sama frontend
+  const TOKEN_SERVER_URL = "/.netlify/functions/token";
   const LIVEKIT_WS_URL   = "wss://meeting-ut7whogq.livekit.cloud";
 </script>
-<!-- ==================================================== -->
 
-<!-- HOME: buat meeting atau gabung pakai kode -->
 <div class="screen" id="home">
   <div class="card">
     <h1>Meeting</h1>
@@ -71,11 +96,10 @@
   </div>
 </div>
 
-<!-- LINK SIAP DIBAGIKAN -->
 <div class="screen" id="linkReady" style="display:none;">
   <div class="card">
     <h1>Meeting sudah siap</h1>
-    <p class="sub">Bagikan link ini ke peserta lain. Siapa pun yang buka link ini akan langsung masuk ke ruang yang sama.</p>
+    <p class="sub">Bagikan link ini ke peserta lain. Kamu jadi host meeting ini.</p>
     <div class="link-box">
       <input id="shareLink" type="text" readonly>
       <button id="copyLinkBtn">Salin</button>
@@ -84,7 +108,6 @@
   </div>
 </div>
 
-<!-- ISI NAMA sebelum masuk -->
 <div class="screen" id="namePrompt" style="display:none;">
   <div class="card">
     <h1>Masuk meeting</h1>
@@ -98,15 +121,29 @@
   </div>
 </div>
 
-<!-- CALL SCREEN -->
 <div id="room">
   <div id="roomLabel">Ruang: <span id="roomLabelText"></span></div>
-  <div id="grid"></div>
+
+  <div id="stageArea">
+    <div id="mainStage">
+      <video id="spotlightVideo" autoplay playsinline></video>
+      <div class="name" id="spotlightName"></div>
+      <button id="unpinBtn">Kembali ke grid</button>
+    </div>
+    <div id="grid"></div>
+  </div>
+
+  <div id="participantsPanel">
+    <div class="ph"><h3 id="participantsTitle">Peserta</h3><button class="closeP" id="closePanelBtn">&times;</button></div>
+    <div id="participantsList"></div>
+  </div>
+
   <div id="controls">
-    <button class="ctrl-btn active" id="micBtn">🎤</button>
-    <button class="ctrl-btn active" id="camBtn">📷</button>
-    <button class="ctrl-btn" id="shareBtn">🖥️</button>
-    <button class="ctrl-btn end" id="endBtn">✕</button>
+    <button class="ctrl-btn active" id="micBtn" title="Mikrofon">🎤</button>
+    <button class="ctrl-btn active" id="camBtn" title="Kamera">📷</button>
+    <button class="ctrl-btn" id="shareBtn" title="Share layar">🖥️</button>
+    <button class="ctrl-btn" id="participantsBtn" title="Peserta">👥<span class="badge-count" id="participantsCount">1</span></button>
+    <button class="ctrl-btn end" id="endBtn" title="Akhiri panggilan">✕</button>
   </div>
 </div>
 
@@ -114,6 +151,13 @@
 const $ = id => document.getElementById(id);
 let room, micOn = true, camOn = true, sharing = false;
 let currentRoomCode = null;
+let myIdentity = null;
+let isHost = false;
+let hostIdentity = null;
+const coHosts = new Set();
+const participantMeta = new Map(); // identity -> {name, micOn, camOn, tiles:{camera:el, screen:el}}
+let spotlightKey = null;   // "identity::kind"
+let autoSpotlightFromScreen = null;
 
 function showScreen(id){
   ["home","linkReady","namePrompt"].forEach(s => $(s).style.display = (s===id) ? "flex" : "none");
@@ -138,6 +182,7 @@ function buildShareUrl(roomCode){
 // ---------- Home actions ----------
 $("createBtn").addEventListener("click", ()=>{
   currentRoomCode = generateRoomCode();
+  isHost = true;
   const link = buildShareUrl(currentRoomCode);
   $("shareLink").value = link;
   showScreen("linkReady");
@@ -153,55 +198,216 @@ $("copyLinkBtn").addEventListener("click", async ()=>{
   }
 });
 
-$("startNowBtn").addEventListener("click", ()=>{
-  goToNamePrompt(currentRoomCode);
-});
-
+$("startNowBtn").addEventListener("click", ()=> goToNamePrompt(currentRoomCode));
 $("joinByCodeBtn").addEventListener("click", ()=>{
   const code = $("joinCodeInput").value.trim();
   if(!code) return;
+  isHost = false;
   goToNamePrompt(code);
 });
 
 function goToNamePrompt(roomCode){
   currentRoomCode = roomCode;
-  $("roomPreviewText").textContent = `Kamu akan masuk ke ruang "${roomCode}"`;
+  $("roomPreviewText").textContent = `Kamu akan masuk ke ruang "${roomCode}"${isHost ? " sebagai host" : ""}`;
   showScreen("namePrompt");
 }
 
-// ---------- Auto-join dari link (?room=xxx) ----------
 window.addEventListener("DOMContentLoaded", ()=>{
   const params = new URLSearchParams(window.location.search);
   const roomFromUrl = params.get("room");
   if(roomFromUrl){
+    isHost = false;
     goToNamePrompt(roomFromUrl);
   } else {
     showScreen("home");
   }
 });
 
-// ---------- Join room (LiveKit) ----------
-function addTile(id, track, name, isLocal=false){
-  removeTile(id);
+// ---------- Tile helpers ----------
+function tileKey(identity, kind){ return identity + "::" + kind; }
+
+function ensureParticipant(identity, name){
+  if(!participantMeta.has(identity)){
+    participantMeta.set(identity, { name: name || identity, micOn:true, camOn:true, tiles:{} });
+  }
+  return participantMeta.get(identity);
+}
+
+function makeTile(identity, kind, track, displayName, isLocal){
   const tile = document.createElement("div");
   tile.className = "tile";
-  tile.id = "tile-" + id;
+  tile.dataset.key = tileKey(identity, kind);
   const video = document.createElement("video");
   video.autoplay = true; video.playsInline = true;
-  if(isLocal) video.muted = true;
+  if(isLocal && kind === "camera") video.muted = true;
   track.attach(video);
   const label = document.createElement("div");
   label.className = "name";
-  label.textContent = name;
+  label.textContent = displayName;
   tile.appendChild(video);
   tile.appendChild(label);
-  $("grid").appendChild(tile);
-}
-function removeTile(id){
-  const el = document.getElementById("tile-" + id);
-  if(el) el.remove();
+  tile.addEventListener("click", ()=> toggleSpotlight(identity, kind));
+  return tile;
 }
 
+function labelFor(identity){
+  const meta = participantMeta.get(identity);
+  let n = meta ? meta.name : identity;
+  if(identity === hostIdentity) n += " • Host";
+  else if(coHosts.has(identity)) n += " • Co-host";
+  if(identity === myIdentity) n += " (kamu)";
+  return n;
+}
+
+function refreshAllLabels(){
+  document.querySelectorAll(".tile .name").forEach(el=>{
+    const tile = el.closest(".tile");
+    const key = tile.dataset.key;
+    const identity = key.split("::")[0];
+    el.textContent = labelFor(identity) + (key.endsWith("::screen") ? " (share layar)" : "");
+  });
+  if(spotlightKey){
+    const identity = spotlightKey.split("::")[0];
+    $("spotlightName").textContent = labelFor(identity) + (spotlightKey.endsWith("::screen") ? " (share layar)" : "");
+  }
+  renderParticipantsPanel();
+}
+
+function addTrackTile(identity, kind, track, displayName, isLocal){
+  const meta = ensureParticipant(identity, displayName);
+  const key = tileKey(identity, kind);
+  removeTrackTile(identity, kind);
+  const tile = makeTile(identity, kind, track, labelFor(identity) + (kind==="screen" ? " (share layar)" : ""), isLocal);
+  meta.tiles[kind] = tile;
+  $("grid").appendChild(tile);
+
+  if(kind === "screen"){
+    autoSpotlightFromScreen = key;
+    spotlightKey = key;
+  }
+  layout();
+  renderParticipantsPanel();
+}
+
+function removeTrackTile(identity, kind){
+  const meta = participantMeta.get(identity);
+  if(meta && meta.tiles[kind]){
+    meta.tiles[kind].remove();
+    delete meta.tiles[kind];
+  }
+  const key = tileKey(identity, kind);
+  if(spotlightKey === key){
+    spotlightKey = null;
+    if(autoSpotlightFromScreen === key) autoSpotlightFromScreen = null;
+  }
+  layout();
+}
+
+function toggleSpotlight(identity, kind){
+  const key = tileKey(identity, kind);
+  if(spotlightKey === key){
+    spotlightKey = null;
+  } else {
+    spotlightKey = key;
+  }
+  layout();
+}
+
+$("unpinBtn").addEventListener("click", ()=>{ spotlightKey = null; layout(); });
+
+function layout(){
+  document.querySelectorAll(".tile").forEach(t => t.classList.toggle("pinned", t.dataset.key === spotlightKey));
+
+  if(spotlightKey){
+    const identity = spotlightKey.split("::")[0];
+    const kind = spotlightKey.split("::")[1];
+    const meta = participantMeta.get(identity);
+    const sourceTile = meta && meta.tiles[kind];
+    if(sourceTile){
+      const sourceVideo = sourceTile.querySelector("video");
+      const spotVideo = $("spotlightVideo");
+      if(sourceVideo && sourceVideo.srcObject !== spotVideo.srcObject){
+        spotVideo.srcObject = sourceVideo.srcObject;
+      }
+      $("spotlightName").textContent = labelFor(identity) + (kind==="screen" ? " (share layar)" : "");
+      $("mainStage").style.display = "block";
+      $("grid").classList.add("filmstrip");
+    } else {
+      spotlightKey = null;
+      $("mainStage").style.display = "none";
+      $("grid").classList.remove("filmstrip");
+    }
+  } else {
+    $("mainStage").style.display = "none";
+    $("grid").classList.remove("filmstrip");
+    $("spotlightVideo").srcObject = null;
+  }
+}
+
+// ---------- Participants panel ----------
+function renderParticipantsPanel(){
+  const list = $("participantsList");
+  list.innerHTML = "";
+  $("participantsTitle").textContent = `Peserta (${participantMeta.size})`;
+  $("participantsCount").textContent = participantMeta.size;
+  participantMeta.forEach((meta, identity)=>{
+    const row = document.createElement("div");
+    row.className = "prow";
+    const nameEl = document.createElement("div");
+    nameEl.className = "pname";
+    nameEl.textContent = labelFor(identity);
+    const micEl = document.createElement("div");
+    micEl.className = "pmic";
+    micEl.textContent = meta.micOn ? "🎤" : "🔇";
+    row.appendChild(nameEl);
+    row.appendChild(micEl);
+    if(isHost && identity !== myIdentity && identity !== hostIdentity){
+      const btn = document.createElement("button");
+      btn.className = "cohost-btn" + (coHosts.has(identity) ? " active" : "");
+      btn.textContent = coHosts.has(identity) ? "Co-host ✓" : "Jadikan Co-host";
+      btn.addEventListener("click", ()=> toggleCoHost(identity));
+      row.appendChild(btn);
+    }
+    list.appendChild(row);
+  });
+}
+
+function toggleCoHost(identity){
+  const value = !coHosts.has(identity);
+  if(value) coHosts.add(identity); else coHosts.delete(identity);
+  broadcast({ type:"cohost", identity, value });
+  refreshAllLabels();
+}
+
+$("participantsBtn").addEventListener("click", ()=>{
+  const panel = $("participantsPanel");
+  panel.style.display = panel.style.display === "flex" ? "none" : "flex";
+});
+$("closePanelBtn").addEventListener("click", ()=> $("participantsPanel").style.display = "none");
+
+// ---------- Data messages (host / co-host sync) ----------
+function broadcast(obj){
+  if(!room) return;
+  const data = new TextEncoder().encode(JSON.stringify(obj));
+  room.localParticipant.publishData(data, { reliable: true });
+}
+
+function handleData(payload){
+  let msg;
+  try{ msg = JSON.parse(new TextDecoder().decode(payload)); }catch(e){ return; }
+  if(msg.type === "host"){
+    hostIdentity = msg.identity;
+    refreshAllLabels();
+  } else if(msg.type === "cohost"){
+    if(msg.value) coHosts.add(msg.identity); else coHosts.delete(msg.identity);
+    refreshAllLabels();
+  } else if(msg.type === "request-host" && isHost){
+    broadcast({ type:"host", identity: myIdentity });
+    coHosts.forEach(id => broadcast({ type:"cohost", identity:id, value:true }));
+  }
+}
+
+// ---------- Join room (LiveKit) ----------
 $("enterBtn").addEventListener("click", async ()=>{
   const identity = $("identityInput").value.trim();
   if(!identity){
@@ -214,21 +420,52 @@ $("enterBtn").addEventListener("click", async ()=>{
 async function joinRoom(roomName, identity){
   try{
     $("joinStatus").textContent = "Menghubungkan...";
-    const res = await fetch(`${TOKEN_SERVER_URL}/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`);
+    const res = await fetch(`${TOKEN_SERVER_URL}?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`);
     if(!res.ok) throw new Error("Token server menolak permintaan.");
     const { token } = await res.json();
+
+    myIdentity = identity;
+    if(isHost) hostIdentity = identity;
+    ensureParticipant(identity, identity);
 
     room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
 
     room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
-      addTile(participant.identity + "-" + track.sid, track, participant.identity);
+      ensureParticipant(participant.identity, participant.identity);
+      const kind = track.source === LivekitClient.Track.Source.ScreenShare ? "screen" : "camera";
+      if(track.kind === "video"){
+        addTrackTile(participant.identity, kind, track, participant.identity, false);
+      }
     });
     room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
-      removeTile(participant.identity + "-" + track.sid);
+      const kind = track.source === LivekitClient.Track.Source.ScreenShare ? "screen" : "camera";
+      removeTrackTile(participant.identity, kind);
+    });
+    room.on(LivekitClient.RoomEvent.TrackMuted, (pub, participant) => {
+      const meta = ensureParticipant(participant.identity, participant.identity);
+      if(pub.kind === "audio") meta.micOn = false;
+      renderParticipantsPanel();
+    });
+    room.on(LivekitClient.RoomEvent.TrackUnmuted, (pub, participant) => {
+      const meta = ensureParticipant(participant.identity, participant.identity);
+      if(pub.kind === "audio") meta.micOn = true;
+      renderParticipantsPanel();
+    });
+    room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
+      ensureParticipant(participant.identity, participant.identity);
+      renderParticipantsPanel();
+      if(isHost){
+        broadcast({ type:"host", identity: myIdentity });
+        coHosts.forEach(id => broadcast({ type:"cohost", identity:id, value:true }));
+      }
     });
     room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
-      document.querySelectorAll(`[id^="tile-${participant.identity}"]`).forEach(el => el.remove());
+      removeTrackTile(participant.identity, "camera");
+      removeTrackTile(participant.identity, "screen");
+      participantMeta.delete(participant.identity);
+      renderParticipantsPanel();
     });
+    room.on(LivekitClient.RoomEvent.DataReceived, (payload) => handleData(payload));
     room.on(LivekitClient.RoomEvent.Disconnected, () => {
       showScreen("home");
     });
@@ -238,16 +475,22 @@ async function joinRoom(roomName, identity){
 
     const camPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
     if(camPub && camPub.track){
-      addTile("local-cam", camPub.track, identity + " (kamu)", true);
+      addTrackTile(identity, "camera", camPub.track, identity, true);
     }
 
-    // update URL bar biar jadi link yang bisa dicopy langsung dari address bar juga
+    if(isHost){
+      broadcast({ type:"host", identity: myIdentity });
+    } else {
+      broadcast({ type:"request-host" });
+    }
+
     const newUrl = buildShareUrl(roomName);
     window.history.replaceState({}, "", newUrl);
 
     $("roomLabelText").textContent = roomName;
     ["home","linkReady","namePrompt"].forEach(s => $(s).style.display = "none");
     $("room").style.display = "flex";
+    renderParticipantsPanel();
   }catch(e){
     console.error(e);
     $("joinStatus").textContent = "Gagal join: " + e.message;
@@ -259,9 +502,12 @@ $("micBtn").addEventListener("click", async ()=>{
   if(!room) return;
   micOn = !micOn;
   await room.localParticipant.setMicrophoneEnabled(micOn);
+  const meta = ensureParticipant(myIdentity, myIdentity);
+  meta.micOn = micOn;
   $("micBtn").classList.toggle("active", micOn);
   $("micBtn").classList.toggle("off", !micOn);
   $("micBtn").textContent = micOn ? "🎤" : "🔇";
+  renderParticipantsPanel();
 });
 
 $("camBtn").addEventListener("click", async ()=>{
@@ -278,6 +524,12 @@ $("shareBtn").addEventListener("click", async ()=>{
   sharing = !sharing;
   await room.localParticipant.setScreenShareEnabled(sharing);
   $("shareBtn").classList.toggle("active", sharing);
+  if(sharing){
+    const pub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.ScreenShare);
+    if(pub && pub.track) addTrackTile(myIdentity, "screen", pub.track, myIdentity, true);
+  } else {
+    removeTrackTile(myIdentity, "screen");
+  }
 });
 
 $("endBtn").addEventListener("click", async ()=>{
