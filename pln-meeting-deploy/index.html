@@ -80,6 +80,7 @@
 <script>
   const TOKEN_SERVER_URL = "/.netlify/functions/token";
   const LIVEKIT_WS_URL   = "wss://meeting-ut7whogq.livekit.cloud";
+  const OWNER_PASSWORD    = "90909090"; // hanya yang tahu password ini bisa "Buat meeting baru"
 </script>
 
 <div class="screen" id="home">
@@ -181,6 +182,12 @@ function buildShareUrl(roomCode){
 
 // ---------- Home actions ----------
 $("createBtn").addEventListener("click", ()=>{
+  const pass = window.prompt("Masukkan password pemilik untuk membuat meeting baru:");
+  if(pass === null) return;
+  if(pass !== OWNER_PASSWORD){
+    alert("Password salah. Kamu tidak bisa membuat meeting baru.");
+    return;
+  }
   currentRoomCode = generateRoomCode();
   isHost = true;
   const link = buildShareUrl(currentRoomCode);
