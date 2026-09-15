@@ -223,6 +223,50 @@ window.addEventListener("DOMContentLoaded", ()=>{
   }
 });
 
+// ---------- Audio: remote track playback + join/leave tone ----------
+const audioEls = new Map(); // key -> <audio> element
+
+function attachAudio(identity, kind, track){
+  const key = tileKey(identity, kind) + "::audio";
+  detachAudio(identity, kind);
+  const audioEl = document.createElement("audio");
+  audioEl.autoplay = true;
+  audioEl.style.display = "none";
+  track.attach(audioEl);
+  document.body.appendChild(audioEl);
+  audioEls.set(key, audioEl);
+}
+function detachAudio(identity, kind){
+  const key = tileKey(identity, kind) + "::audio";
+  const el = audioEls.get(key);
+  if(el){ el.remove(); audioEls.delete(key); }
+}
+
+let audioCtx = null;
+function playTone(kind){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = audioCtx;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = "sine";
+    const now = ctx.currentTime;
+    if(kind === "join"){
+      o.frequency.setValueAtTime(660, now);
+      o.frequency.setValueAtTime(880, now + 0.12);
+    } else {
+      o.frequency.setValueAtTime(660, now);
+      o.frequency.setValueAtTime(440, now + 0.12);
+    }
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.15, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+    o.start(now);
+    o.stop(now + 0.3);
+  }catch(e){ /* ignore */ }
+}
+
 // ---------- Tile helpers ----------
 function tileKey(identity, kind){ return identity + "::" + kind; }
 
@@ -432,14 +476,20 @@ async function joinRoom(roomName, identity){
 
     room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
       ensureParticipant(participant.identity, participant.identity);
-      const kind = track.source === LivekitClient.Track.Source.ScreenShare ? "screen" : "camera";
       if(track.kind === "video"){
+        const kind = track.source === LivekitClient.Track.Source.ScreenShare ? "screen" : "camera";
         addTrackTile(participant.identity, kind, track, participant.identity, false);
+      } else if(track.kind === "audio"){
+        attachAudio(participant.identity, "mic", track);
       }
     });
     room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
-      const kind = track.source === LivekitClient.Track.Source.ScreenShare ? "screen" : "camera";
-      removeTrackTile(participant.identity, kind);
+      if(track.kind === "video"){
+        const kind = track.source === LivekitClient.Track.Source.ScreenShare ? "screen" : "camera";
+        removeTrackTile(participant.identity, kind);
+      } else if(track.kind === "audio"){
+        detachAudio(participant.identity, "mic");
+      }
     });
     room.on(LivekitClient.RoomEvent.TrackMuted, (pub, participant) => {
       const meta = ensureParticipant(participant.identity, participant.identity);
@@ -454,6 +504,7 @@ async function joinRoom(roomName, identity){
     room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
       ensureParticipant(participant.identity, participant.identity);
       renderParticipantsPanel();
+      playTone("join");
       if(isHost){
         broadcast({ type:"host", identity: myIdentity });
         coHosts.forEach(id => broadcast({ type:"cohost", identity:id, value:true }));
@@ -462,8 +513,10 @@ async function joinRoom(roomName, identity){
     room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
       removeTrackTile(participant.identity, "camera");
       removeTrackTile(participant.identity, "screen");
+      detachAudio(participant.identity, "mic");
       participantMeta.delete(participant.identity);
       renderParticipantsPanel();
+      playTone("leave");
     });
     room.on(LivekitClient.RoomEvent.DataReceived, (payload) => handleData(payload));
     room.on(LivekitClient.RoomEvent.Disconnected, () => {
